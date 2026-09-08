@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import os
 import subprocess
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from . import live
+from . import containers, live
 from .discover import Discovery, scan_project, primary_port
 from .registry import Entry, Registry
 
@@ -21,19 +21,22 @@ STALE_DAYS = 180
 class Finding:
     """One diagnostic result."""
 
-    __slots__ = ("check", "severity", "port", "message", "fix")
+    __slots__ = ("check", "severity", "port", "message", "fix", "detail")
 
     def __init__(self, check: str, severity: str, port: Optional[int],
-                 message: str, fix: str = "") -> None:
+                 message: str, fix: str = "",
+                 detail: Optional[Dict[str, Any]] = None) -> None:
         self.check = check
         self.severity = severity
         self.port = port
         self.message = message
         self.fix = fix
+        # Machine-readable payload for `doctor --fix`; empty when nothing to apply.
+        self.detail: Dict[str, Any] = detail or {}
 
-    def to_dict(self) -> Dict[str, object]:
-        return {"check": self.check, "severity": self.severity,
-                "port": self.port, "message": self.message, "fix": self.fix}
+    def to_dict(self) -> Dict[str, Any]:
+        return {"check": self.check, "severity": self.severity, "port": self.port,
+                "message": self.message, "fix": self.fix, "detail": self.detail}
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
         return "Finding({}, {}, {})".format(self.check, self.severity, self.port)
@@ -77,7 +80,8 @@ def check_drift(reg: Registry, max_source_files: int = 250) -> List[Finding]:
             "drift", "medium", e.port,
             "{}: registry says {} but code says {} ({})".format(
                 e.name, e.port, found, where),
-            "update the registry, or the code"))
+            "update the registry, or the code",
+            {"project": e.name, "port": found, "path": e.path}))
     return out
 
 
@@ -114,14 +118,24 @@ def check_squatters(reg: Registry, listeners: Optional[Dict[int, live.Listener]]
 
 
 def check_orphans(reg: Registry, listeners: Optional[Dict[int, live.Listener]] = None,
-                  cwds: Optional[Dict[int, str]] = None) -> List[Finding]:
+                  cwds: Optional[Dict[int, str]] = None,
+                  boxes: Optional[Dict[int, containers.Container]] = None) -> List[Finding]:
     """Listening ports nobody registered."""
     known = set(reg.by_port())
     out: List[Finding] = []
     if listeners is None or cwds is None:
         listeners, cwds = snapshot()
+    boxes = containers.by_port() if boxes is None else boxes
     for port, listener in sorted(listeners.items()):
         if port in known:
+            continue
+        box = boxes.get(port)
+        if box:
+            out.append(Finding(
+                "orphan", "low", port,
+                "port {} is published by container {} ({}) and is not registered".format(
+                    port, box.name, box.image),
+                "docker stop {}".format(box.name)))
             continue
         cwd = cwds.get(listener.pid, "")
         where = " from {}".format(cwd) if cwd else ""
@@ -181,7 +195,8 @@ def check_unregistered(reg: Registry, discoveries: Sequence[Discovery]) -> List[
         out.append(Finding(
             "unregistered", "low", d.port,
             "{}: uses port {} but is not in the registry".format(d.name, d.port),
-            "portdeck scan --write"))
+            "portdeck scan --write",
+            {"project": d.name, "port": d.port, "path": d.root}))
     return out
 
 

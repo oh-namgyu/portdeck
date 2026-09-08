@@ -7,8 +7,9 @@
 > **한글 요약** — 로컬에 프로젝트가 수십 개 쌓이면 "이 포트가 누구 거였지?"가 시작됩니다.
 > portdeck 은 프로젝트를 훑어 **코드가 선언한 포트를 근거(파일:줄)와 함께** 찾아 등록부를 만들고,
 > 지금 그 포트를 **실제로 누가 점유 중인지**(pid·실행 디렉토리) 대조해 충돌·표류·무단점유를 진단합니다.
-> `map`·`graph` 는 각 서비스의 라우트와 서비스 간 호출 관계를 정적 스캔으로 그려 줍니다.
-> 의존성 0 (표준 라이브러리만), 읽기 전용 — 프로세스를 죽이거나 코드를 고치지 않습니다.
+> `map`·`graph` 는 각 서비스의 라우트와 서비스 간 호출 관계를 정적 스캔으로 그려 주고,
+> `free` 는 아무도 안 쓰는 포트를, `watch` 는 포트가 뜨고 지는 순간을 알려 줍니다.
+> 의존성 0 (표준 라이브러리만). 쓰기는 등록부 파일 하나뿐 — 프로세스를 죽이거나 코드를 고치지 않습니다.
 
 Keep a registry of the ports your local projects use, find the ones you never wrote
 down, and see who is actually holding them right now.
@@ -20,14 +21,16 @@ started last week, a container you forgot, or macOS itself? Your notes say proje
 owns `:6040`, but the code says otherwise — and you find out when two services fight
 over a socket at 2am.
 
-portdeck answers four questions:
+portdeck answers the questions that follow from that:
 
 | Question | Command |
 |---|---|
 | What ports do my projects declare? | `portdeck scan ~/code` |
 | What is registered, and what is running? | `portdeck ls` |
 | What is wrong right now? | `portdeck doctor` |
+| Which port can I safely use for the new thing? | `portdeck free` |
 | Who calls whom, and on which port? | `portdeck graph` |
+| What just started on my machine? | `portdeck watch` |
 
 ## Install
 
@@ -94,6 +97,63 @@ registered port), **drift** (registry disagrees with the code), **missing-path**
 `doctor` exits **1** when anything is `high`, so it works as a pre-flight check in a
 script or CI job. `--json` gives the same findings as data.
 
+`doctor --fix` applies only the findings with one obvious resolution — drift (believe
+the code) and unregistered projects. Collisions and squatters are left alone, because
+deciding which project moves, or which process dies, is not the tool's call. If
+believing the code puts two projects on one port, the run says so and exits 1:
+
+```console
+$ portdeck doctor --fix
+updated chronicle :6040
+updated inbox-api :5008
+port 5008 is claimed by 2 projects: inbox-api, doc-search
+2 applied, 12 left for you
+```
+
+### Take a free port, rather than guessing one
+
+```console
+$ portdeck free                # lowest port nothing has claimed
+4103
+
+$ portdeck free 3 --from 6000  # three of them
+6001
+6002
+6004
+
+$ portdeck free --near billing # keep it in billing's own hundred-block
+6107
+```
+
+A port counts as free only if it is absent from the registry, silent on the socket,
+and not one of the numbers other tooling habitually grabs (3000, 5432, 8080, …).
+
+### Watch ports come and go
+
+```console
+$ portdeck watch
+watching 14 ports — Ctrl-C to stop
++  6040  chronicle      python3 (44120)
+-  3000  web-frontend   node (41290)
+~  5433  unregistered   com.docker.backend (900)
+```
+
+`+` started, `-` stopped, `~` same port, new process.
+
+### Containers
+
+Published container ports are attributed to the container rather than to
+`com.docker.backend`, which is all `lsof` can tell you:
+
+```console
+$ portdeck who 5433
+published by container billing-db (postgres:16)
+to free it: docker stop billing-db
+```
+
+Docker is optional — without the CLI or a running daemon, these lines simply do not
+appear.
+
 ### Map one service, or all of them
 
 ```console
@@ -133,7 +193,7 @@ Both are static scans: routes are read out of Flask/FastAPI decorators, Express
 handlers and Next.js file conventions, and every `http://host:port` literal is matched
 back to a registered project. Nothing is imported or executed.
 
-### Free a port
+### Find out what holds a port
 
 ```console
 $ portdeck who 5000
@@ -193,12 +253,15 @@ takes down the rest of the file.
   who holds the port, and the `squatter` check cannot fire.
 - Route and call detection is regex over source, capped at 1200 files per project. It
   finds conventional Flask/FastAPI/Express/Next.js shapes, not dynamically built ones.
-- Everything is read-only. portdeck edits its own registry and nothing else.
+- Container attribution needs the `docker` CLI and a running daemon; without them
+  those ports are reported by process, as before.
+- Everything is read-only apart from the registry: `scan --write`, `add`, `rm` and
+  `doctor --fix` edit that one file and nothing else. No process is ever stopped.
 
 ## Development
 
 ```bash
-python -m unittest discover -s tests -t .    # 102 tests, no dependencies
+python -m unittest discover -s tests -t .    # 131 tests, no dependencies
 ```
 
 ## License

@@ -9,7 +9,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
-from portdeck import cli, doctor, live
+from portdeck import cli, containers, doctor, live
 
 
 def run(argv, registry):
@@ -28,9 +28,11 @@ class CliTest(unittest.TestCase):
         self.workspace = os.path.join(self.dir, "workspace")
         os.makedirs(self.workspace)
         # Nothing is listening in these tests unless a case says otherwise.
-        patcher = mock.patch.object(live, "listening_ports", return_value={})
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        for target, value in ((live, {}), (containers, {})):
+            name = "listening_ports" if target is live else "by_port"
+            patcher = mock.patch.object(target, name, return_value=value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def project(self, name: str, files: dict) -> str:
         root = os.path.join(self.workspace, name)
@@ -174,6 +176,59 @@ class CliTest(unittest.TestCase):
         with redirect_stdout(buffer), redirect_stderr(io.StringIO()):
             cli.main(["ls", "--json", "--registry", self.registry])
         self.assertEqual(json.loads(buffer.getvalue())[0]["name"], "api")
+
+    def test_free_suggests_an_unused_port(self) -> None:
+        run(["add", "a", "4000"], self.registry)
+        code, out = run(["free", "--from", "4000"], self.registry)
+        self.assertEqual(code, 0)
+        self.assertEqual(out.strip(), "4001")
+
+    def test_free_suggests_several(self) -> None:
+        _code, out = run(["free", "3", "--from", "4000"], self.registry)
+        self.assertEqual(out.split(), ["4000", "4001", "4002"])
+
+    def test_free_near_a_project_stays_in_its_block(self) -> None:
+        run(["add", "game", "6140"], self.registry)
+        _code, out = run(["free", "--near", "game"], self.registry)
+        self.assertEqual(out.strip(), "6100")
+
+    def test_doctor_fix_updates_drifted_entries(self) -> None:
+        root = self.project("api", {"app.py": "app.run(port=7010)\n",
+                                    "requirements.txt": "flask\n"})
+        run(["add", "api", "7000", "--path", root], self.registry)
+        code, out = run(["doctor", "--fix"], self.registry)
+        self.assertEqual(code, 0)
+        self.assertIn("updated api :7010", out)
+        self.assertEqual(self.read_registry()["projects"][0]["port"], 7010)
+
+    def test_doctor_fix_warns_when_a_fix_creates_a_collision(self) -> None:
+        one = self.project("one", {"app.py": "app.run(port=7010)\n",
+                                   "requirements.txt": "flask\n"})
+        two = self.project("two", {"app.py": "app.run(port=7010)\n",
+                                   "requirements.txt": "flask\n"})
+        run(["add", "one", "7001", "--path", one], self.registry)
+        run(["add", "two", "7002", "--path", two], self.registry)
+        code, out = run(["doctor", "--fix"], self.registry)
+        self.assertEqual(code, 1)
+        self.assertIn("claimed by 2 projects", out)
+
+    def test_doctor_fix_leaves_collisions_to_the_user(self) -> None:
+        run(["add", "a", "5000"], self.registry)
+        run(["add", "b", "5000"], self.registry)
+        code, out = run(["doctor", "--fix"], self.registry)
+        self.assertEqual(code, 1)
+        self.assertIn("1 left for you", out)
+        self.assertEqual(len(self.read_registry()["projects"]), 2)
+
+    def test_who_reports_a_container(self) -> None:
+        held = live.Listener(5433, 900, "com.docker.backend")
+        box = containers.Container("a1", "billing-db", "postgres:16")
+        with mock.patch.object(live, "owner_of", return_value=held), \
+             mock.patch.object(containers, "by_port", return_value={5433: box}), \
+             mock.patch.object(live, "cwd_of", return_value=""):
+            _code, out = run(["who", "5433"], self.registry)
+        self.assertIn("billing-db", out)
+        self.assertIn("docker stop billing-db", out)
 
     def test_paths_are_stored_relative_to_home(self) -> None:
         home = os.path.expanduser("~")
