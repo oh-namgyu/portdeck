@@ -48,7 +48,7 @@ holds it.
 $ portdeck scan ~/code --depth 2
 PORT  PROJECT       STATUS                   EVIDENCE
 3000  web-frontend  new                      package.json:0 [script]
-5038  api-gateway   new                      app.py:212 [listen]
+4400  api-gateway   new                      app.py:212 [listen]
 6040  chronicle     differs (registry 6041)  chronicle/config.py:4 [const]
 8081  billing       new                      docker-compose.yml:7 [compose]
 -     scratchpad    no port found
@@ -66,7 +66,7 @@ $ portdeck ls
 PORT  PROJECT       STATE       HELD BY              PATH
 3000  web-frontend  ●  running  node (41290)         ~/code/web-frontend
 5000  daily-news    !  foreign  ControlCenter (668)  ~/code/daily-news
-5038  api-gateway   ·  stopped                       ~/code/api-gateway
+4400  api-gateway   ·  stopped                       ~/code/api-gateway
 ```
 
 `foreign` means the port is busy, but the process holding it is running from somewhere
@@ -98,7 +98,7 @@ script or CI job. `--json` gives the same findings as data.
 
 ```console
 $ portdeck map api-gateway
-api-gateway  :5038
+api-gateway  :4400
 /home/you/code/api-gateway
 
 ENTRYPOINTS
@@ -123,9 +123,9 @@ scanned 34 files
 $ portdeck graph --mermaid
 flowchart LR
   n_web_frontend["web-frontend<br/>:3000"]
-  n_api_gateway["api-gateway<br/>:5038"]
+  n_api_gateway["api-gateway<br/>:4400"]
   n_chronicle["chronicle<br/>:6040"]
-  n_web_frontend -->|:5038| n_api_gateway
+  n_web_frontend -->|:4400| n_api_gateway
   n_api_gateway -->|:6040| n_chronicle
 ```
 
@@ -152,7 +152,7 @@ most-cited port.
 | Kind | Example |
 |---|---|
 | `compose` | `- "8081:80"` in a compose file |
-| `listen` | `app.listen(3000)`, `app.run(port=5038)`, `uvicorn.run(..., port=8000)` |
+| `listen` | `app.listen(3000)`, `app.run(port=4400)`, `uvicorn.run(..., port=8000)` |
 | `config` | `"port": 5074` in `config.json` |
 | `script` | `vite --port 5173`, `python3 -m http.server 6070` in npm scripts |
 | `env` | `PORT=5123` in `.env` |
@@ -177,7 +177,7 @@ Plain JSON, resolved in this order: `$PORTDECK_REGISTRY`, `./portdeck.json`,
 {
   "version": 1,
   "projects": [
-    { "name": "api-gateway", "port": 5038, "path": "~/code/api-gateway" }
+    { "name": "api-gateway", "port": 4400, "path": "~/code/api-gateway" }
   ]
 }
 ```

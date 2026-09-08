@@ -141,11 +141,11 @@ class CliTest(unittest.TestCase):
 
     def test_graph_mermaid_contains_the_edge(self) -> None:
         hub = self.project("hub", {"app.py": "x = 1\n"})
-        caller = self.project("caller", {"c.py": "U='http://127.0.0.1:5038/x'\n"})
-        run(["add", "hub", "5038", "--path", hub], self.registry)
+        caller = self.project("caller", {"c.py": "U='http://127.0.0.1:4400/x'\n"})
+        run(["add", "hub", "4400", "--path", hub], self.registry)
         run(["add", "caller", "6000", "--path", caller], self.registry)
         _code, out = run(["graph", "--mermaid"], self.registry)
-        self.assertIn("n_caller -->|:5038| n_hub", out)
+        self.assertIn("n_caller -->|:4400| n_hub", out)
 
     def test_who_reports_a_free_port(self) -> None:
         with mock.patch.object(live, "owner_of", return_value=None):

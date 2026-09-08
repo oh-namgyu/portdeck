@@ -6,8 +6,8 @@ from unittest import mock
 from portdeck import doctor, live
 
 LISTEN_OUTPUT = "\n".join([
-    "p668", "cControlCenter", "uryohi", "n*:5000",
-    "p85276", "cPython", "uryohi", "n127.0.0.1:5038",
+    "p668", "cControlCenter", "udev", "n*:5000",
+    "p85276", "cPython", "udev", "n127.0.0.1:4400",
     "n[::1]:5039",
 ])
 CWD_OUTPUT = "\n".join(["p668", "fcwd", "n/", "p85276", "fcwd", "n/home/you/code/api"])
@@ -17,9 +17,9 @@ class ParseTest(unittest.TestCase):
     def test_listening_ports_parses_field_output(self) -> None:
         with mock.patch.object(live, "_run_lsof", return_value=LISTEN_OUTPUT):
             ports = live.listening_ports()
-        self.assertEqual(sorted(ports), [5000, 5038, 5039])
+        self.assertEqual(sorted(ports), [4400, 5000, 5039])
         self.assertEqual(ports[5000].command, "ControlCenter")
-        self.assertEqual(ports[5038].pid, 85276)
+        self.assertEqual(ports[4400].pid, 85276)
 
     def test_ipv6_names_resolve_to_a_port(self) -> None:
         with mock.patch.object(live, "_run_lsof", return_value=LISTEN_OUTPUT):

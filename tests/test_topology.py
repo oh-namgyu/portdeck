@@ -58,8 +58,8 @@ class TopologyTest(unittest.TestCase):
     def test_outbound_call_resolves_to_a_registered_project(self) -> None:
         other = self.project("other", {"app.py": "x = 1\n"})
         root = self.project("caller", {
-            "client.py": "URL = 'http://localhost:5038/api/notify'\n"})
-        reg = Registry([Entry("hub", 5038, other), Entry("caller", 6000, root)], "")
+            "client.py": "URL = 'http://localhost:4400/api/notify'\n"})
+        reg = Registry([Entry("hub", 4400, other), Entry("caller", 6000, root)], "")
         calls = topology.scan(root, reg)["calls"]
         self.assertEqual(calls[0]["project"], "hub")
         self.assertTrue(calls[0]["local"])
@@ -70,8 +70,8 @@ class TopologyTest(unittest.TestCase):
         self.assertIsNone(calls[0]["project"])
 
     def test_remote_hosts_are_not_resolved_to_local_projects(self) -> None:
-        root = self.project("caller", {"client.py": "U = 'http://example.com:5038/x'\n"})
-        reg = Registry([Entry("hub", 5038, self.dir)], "")
+        root = self.project("caller", {"client.py": "U = 'http://example.com:4400/x'\n"})
+        reg = Registry([Entry("hub", 4400, self.dir)], "")
         calls = topology.scan(root, reg)["calls"]
         self.assertIsNone(calls[0]["project"])
         self.assertFalse(calls[0]["local"])
@@ -92,17 +92,17 @@ class TopologyTest(unittest.TestCase):
 
     def test_graph_builds_edges_between_projects(self) -> None:
         hub = self.project("hub", {"app.py": "@app.route('/api')\ndef a(): pass\n"})
-        caller = self.project("caller", {"c.py": "U='http://127.0.0.1:5038/api'\n"})
-        reg = Registry([Entry("hub", 5038, hub), Entry("caller", 6000, caller)], "")
+        caller = self.project("caller", {"c.py": "U='http://127.0.0.1:4400/api'\n"})
+        reg = Registry([Entry("hub", 4400, hub), Entry("caller", 6000, caller)], "")
         graph = topology.graph(reg)
-        self.assertEqual(graph["edges"], [{"from": "caller", "to": "hub", "port": 5038}])
+        self.assertEqual(graph["edges"], [{"from": "caller", "to": "hub", "port": 4400}])
         self.assertEqual(sorted(n["name"] for n in graph["nodes"]), ["caller", "hub"])
 
     def test_graph_deduplicates_repeated_edges(self) -> None:
         hub = self.project("hub", {"app.py": "x = 1\n"})
         caller = self.project("caller", {
-            "a.py": "U='http://127.0.0.1:5038/one'\n", "b.py": "V='http://127.0.0.1:5038/two'\n"})
-        reg = Registry([Entry("hub", 5038, hub), Entry("caller", 6000, caller)], "")
+            "a.py": "U='http://127.0.0.1:4400/one'\n", "b.py": "V='http://127.0.0.1:4400/two'\n"})
+        reg = Registry([Entry("hub", 4400, hub), Entry("caller", 6000, caller)], "")
         self.assertEqual(len(topology.graph(reg)["edges"]), 1)
 
     def test_truncation_is_reported(self) -> None:

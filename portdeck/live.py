@@ -108,7 +108,7 @@ def _parse_field_output(text: str) -> Dict[int, Listener]:
 
 
 def _port_from_name(name: str) -> Optional[int]:
-    """Extract the local port from an lsof name field ('*:5038', '[::1]:80')."""
+    """Extract the local port from an lsof name field ('*:4400', '[::1]:80')."""
     local = name.split("->", 1)[0].strip()
     if ":" not in local:
         return None
