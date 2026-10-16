@@ -16,7 +16,7 @@ client and no third-party dependencies.
 | Reading source files | The roots you pass to `scan`/`map`, capped per project |
 | Listing listeners | `lsof -nP -iTCP -sTCP:LISTEN` and `lsof -p PID -d cwd` |
 | Probing a port | A TCP connect to `127.0.0.1:PORT`, closed immediately |
-| Writing | The registry file only, and only on `scan --write`, `add`, `rm` |
+| Writing | The registry file only, and only on `scan --write`, `add`, `rm`, `doctor --fix` |
 
 portdeck never stops a process. `who` prints the pid and the command you could
 run; running it is your decision.
